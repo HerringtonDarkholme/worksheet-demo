@@ -2,12 +2,24 @@
 
 
 import scala.language.higherKinds
+
 /*
  we can do recursion at the type-level in Scala.
  The first application for this will be representing numbers
  in the type system (Peano numbers).
  One use of these is type-safe indexing into HLists.
  */
+
+/*
+compare to value level
+trait Fold[-Elem, Value] {
+  def apply(e: Elem, v: Value): Value
+}
+*/
+
+trait Fold[-Elem, Value] {
+  type Apply[E <: Elem, V <: Value] <: Value
+}
 
 // the basic idea here is straight
 // first define a basic abstract class
@@ -32,6 +44,8 @@ sealed trait Nat {
   type Match[NonZero[N <: Nat] <: Up, IfZero <: Up, Up] <: Up
 
   type Compare[N <: Nat] <: Comparison
+
+  type FoldR[Init <: Type, Type, F <: Fold[Nat, Type]] <: Type
 }
 
 sealed trait _0 extends Nat {
@@ -43,6 +57,8 @@ sealed trait _0 extends Nat {
   type Compare[N <: Nat] = N#Match[ConstLT, EQ, Comparison]
 
   type ConstLT[A] = LT
+
+  type FoldR[Init <: Type, Type, F <: Fold[Nat, Type]] = Init
 }
 
 sealed trait Succ[N <: Nat] extends Nat {
@@ -53,6 +69,9 @@ sealed trait Succ[N <: Nat] extends Nat {
   type Compare[O <: Nat] = O#Match[N#Compare, GT, Comparison]
   // that is Compare always return Comparison
   // and Compare is not a cyclic reference
+
+  type FoldR[Init <: Type, Type, F <: Fold[Nat, Type]] =
+    F#Apply[Succ[N], N#FoldR[Init, Type, F]]
 }
 
 // forget about macro, it's too heavy to implement for this
@@ -60,7 +79,24 @@ type _1 = Succ[_0]
 type _2 = Succ[_1]
 type _3 = Succ[_2]
 type _4 = Succ[_3]
+type _5 = Succ[_4]
+type _6 = Succ[_5]
+type _7 = Succ[_6]
+type _8 = Succ[_7]
+type _9 = Succ[_8]
+type _10 = Succ[_9]
 
 toBoolean[_0#Compare[_0]#eq]
 toBoolean[_0#Compare[_0]#lt]
 toBoolean[_3#Compare[_4]#le]
+
+type C = _0#FoldR[Int, AnyVal, Fold[Nat, AnyVal]]
+implicitly[C =:= Int]
+
+case class NatRep[N <: Nat](value: Int)
+
+def toInt[N <: Nat : NatRep]: Int = implicitly[NatRep[N]].value
+implicit val zeroRep = NatRep[_0](0)
+implicit def posRep[N <: Nat: NatRep]: NatRep[Succ[N]] =
+  NatRep(toInt[N] + 1)
+
